@@ -34,7 +34,6 @@ body {
     background: linear-gradient(135deg, #064e3b, #065f46, #022c22);
 }
 
-/* SIDE MENU STYLES */
 #sidebar {
     position: fixed;
     top: 0;
@@ -166,12 +165,12 @@ body {
 
     <div id="whitepaper-view" class="view-container hidden glass p-8 rounded-2xl mt-4">
         <h2 class="text-2xl font-black mb-4 uppercase">White Paper</h2>
-        <p class="text-sm leading-relaxed mb-4">The BIOSA Jackpot Hub is a transparent student-led initiative. 70% of proceeds go to the prize pool, while 30% supports departmental projects.</p>
+        <p class="text-sm">70% prize pool, 30% BIOSA Projects.</p>
     </div>
 
     <div id="about-view" class="view-container hidden glass p-8 rounded-2xl mt-4">
-        <h2 class="text-2xl font-black mb-4 uppercase">About Us</h2>
-        <p class="text-sm">Created by the Biology Students Association (BIOSA).</p>
+        <h2 class="text-2xl font-black mb-4 uppercase">About</h2>
+        <p class="text-sm">BIOSA x EMT platform.</p>
     </div>
 
     <div id="contact-view" class="view-container hidden glass p-8 rounded-2xl mt-4 text-center">
@@ -193,7 +192,7 @@ body {
 </div>
 
 <script>
-// --- FIREBASE CONFIG ---
+// --- FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyBQDEsK-m8xMjiEksQm3cm_zUY9y2iJ5RU",
   authDomain: "my-jackpot-2cd55.firebaseapp.com",
@@ -213,19 +212,14 @@ const TG_CHAT = "1162133317";
 
 let WINNING_NUMBER = null; 
 
-// --- AUTO HOURLY NUMBER LOGIC ---
+// --- AUTO HOURLY LOGIC ---
 function syncWinningNumber() {
     const currentSessionID = getSessionID();
-    
     db.ref('sessionWinningNumber').once('value').then(snap => {
         const data = snap.val();
-        
         if (!data || data.id !== currentSessionID) {
             const newLuckyNumber = Math.floor(Math.random() * 100) + 1;
-            db.ref('sessionWinningNumber').set({
-                id: currentSessionID,
-                number: newLuckyNumber
-            });
+            db.ref('sessionWinningNumber').set({ id: currentSessionID, number: newLuckyNumber });
             WINNING_NUMBER = newLuckyNumber.toString();
         } else {
             WINNING_NUMBER = data.number.toString();
@@ -243,7 +237,6 @@ function getSessionID() {
     return `${y}-${m}-${d}-${h}`;
 }
 
-// Start Sync
 syncWinningNumber();
 
 function notifyTG(msg) {
@@ -272,7 +265,6 @@ setInterval(() => {
     if (mins === 0 && secs === 0) syncWinningNumber();
 }, 1000);
 
-/* CHAT */
 function toggleChat() { let b = document.getElementById("chatBox"); b.style.display = (b.style.display === "block") ? "none" : "block"; }
 function sendChat() {
     let i = document.getElementById("chatInput"); if (!i.value.trim()) return;
@@ -280,13 +272,13 @@ function sendChat() {
     document.getElementById("chatMessages").appendChild(p); i.value = "";
 }
 
-/* CORE ACTIONS */
+/* ACTIONS */
 let currentUser = null;
 
 function pay() {
     const email = document.getElementById("email").value;
     const nickname = document.getElementById("nickname").value;
-    if (!email || !nickname) return alert("Required fields missing");
+    if (!email || !nickname) return alert("Fields missing");
 
     FlutterwaveCheckout({
         public_key: "FLWPUBK_TEST-e901ddb220d390db03c72ca07954cbdf-X",
@@ -300,7 +292,6 @@ function pay() {
 
             document.getElementById("codeBox").classList.remove("hidden");
             document.getElementById("code").innerText = code;
-            alert("Success! Copy your code: " + code);
 
             db.ref('codes/' + code).set({ 
                 nickname, email, paid: true, used: false, 
@@ -328,15 +319,15 @@ function login() {
         const d = s.val();
         if(d && d.paid && !d.used) {
             currentUser = input;
-            document.getElementById("loginStatus").innerText = "Welcome, " + d.nickname;
+            document.getElementById("loginStatus").innerText = "Logged in: " + d.nickname;
             document.getElementById("gameBox").classList.remove("hidden");
-        } else { alert("Code invalid or already used."); }
+        } else { alert("Invalid code."); }
     });
 }
 
 function submitGuess() {
     const val = document.getElementById("guess").value;
-    if(!currentUser || !val || !WINNING_NUMBER) return alert("Syncing... try in 2 seconds");
+    if(!currentUser || !val || !WINNING_NUMBER) return alert("Syncing...");
 
     db.ref('codes/' + currentUser).once('value').then(s => {
         const d = s.val();
@@ -348,7 +339,10 @@ function submitGuess() {
             revealedWinNum: WINNING_NUMBER, timePlayed: timePlayed
         })
         .then(() => {
-            notifyTG(`🎯 GUESS LOGGED\nUser: ${d.nickname}\nGuess: ${val}\nResult: ${status}\nCode: ${currentUser}`);
+            // FIX: Exact Telegram format you requested
+            const tgMsg = `🎯 NEW GUESS SUBMISSION\n\n👤 Nickname: ${d.nickname}\n📧 Email: ${d.email}\n🔢 Guess: ${val}\n🏆 Result: ${status}\n🔑 Code: ${currentUser}\n💳 Ref Used: ${d.ref}\n🕒 Time: ${timePlayed}`;
+            notifyTG(tgMsg);
+
             fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Nickname: d.nickname, Guess: val, Result: status, Session: d.sessionID, Code: currentUser }) });
             alert("Guess Logged!"); location.reload();
         });
@@ -358,23 +352,15 @@ function submitGuess() {
 function checkUserResult() {
     const checkCode = document.getElementById("resultCheckCode").value.trim();
     const display = document.getElementById("resultDisplay");
-    
     db.ref('codes/' + checkCode).once('value').then(s => {
         const d = s.val();
-        if(!d || !d.used) return alert("Result not found.");
-        
+        if(!d || !d.used) return alert("No result.");
         const currentSession = getSessionID();
-        
         if (currentSession === d.sessionID) {
-            display.innerHTML = `<div class="bg-amber-100 p-4 rounded-xl border border-amber-300 font-bold text-amber-800 text-xs">⏳ SESSION IN PROGRESS. Reveal starts next hour.</div>`;
+            display.innerHTML = `<div class="bg-amber-100 p-4 rounded-xl border border-amber-300 font-bold text-amber-800 text-xs">⏳ SESSION IN PROGRESS.</div>`;
         } else {
             const color = d.result === "WINNER" ? "text-green-600" : "text-red-600";
-            display.innerHTML = `
-                <div class="bg-white p-4 rounded-xl border border-slate-200">
-                    <p class="font-black text-2xl ${color}">${d.result}</p>
-                    <p class="text-sm">Your Guess: <b>${d.guess}</b></p>
-                    <p class="text-sm">Draw Number: <b class="text-green-700">${d.revealedWinNum}</b></p>
-                </div>`;
+            display.innerHTML = `<div class="bg-white p-4 border rounded-xl"><p class="font-black text-2xl ${color}">${d.result}</p><p class="text-sm">Guess: ${d.guess} | Win Num: ${d.revealedWinNum}</p></div>`;
         }
     });
 }
