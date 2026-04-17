@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -165,16 +166,22 @@ body {
 
     <div id="whitepaper-view" class="view-container hidden glass p-8 rounded-2xl mt-4">
         <h2 class="text-2xl font-black mb-4 uppercase">White Paper</h2>
-        <p class="text-sm leading-relaxed mb-4">The BIOSA Jackpot Hub is a transparent student-led initiative.</p>
+        <p class="text-sm leading-relaxed mb-4">The BIOSA Jackpot Hub is a transparent student-led initiative. 70% of proceeds go to the prize pool, while 30% supports departmental projects.</p>
+        <p class="text-sm font-bold">Rules:</p>
+        <ul class="text-xs list-disc ml-4 mt-2">
+            <li>Numbers refresh every hour.</li>
+            <li>Double entries are blocked by the system.</li>
+        </ul>
     </div>
 
     <div id="about-view" class="view-container hidden glass p-8 rounded-2xl mt-4">
         <h2 class="text-2xl font-black mb-4 uppercase">About Us</h2>
-        <p class="text-sm">Created by BIOSA × EMT leadership.</p>
+        <p class="text-sm">Created by the Biology Students Association (BIOSA) in partnership with Environmental Management Technology (EMT) to foster digital engagement.</p>
     </div>
 
     <div id="contact-view" class="view-container hidden glass p-8 rounded-2xl mt-4 text-center">
         <h2 class="text-2xl font-black mb-4 uppercase">Contact Us</h2>
+        <p class="text-sm">For payment issues or sponsorship:</p>
         <p class="font-bold text-green-800 mt-2">+234 916 160 5444</p>
     </div>
 
@@ -192,7 +199,7 @@ body {
 </div>
 
 <script>
-// --- CONFIGS ---
+// --- FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyBQDEsK-m8xMjiEksQm3cm_zUY9y2iJ5RU",
   authDomain: "my-jackpot-2cd55.firebaseapp.com",
@@ -206,27 +213,16 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 document.getElementById('db-indicator').innerText = "✅ System Online";
 
-const FORM = "https://formspree.io/f/xaqaeqjy";
-const TG_TOKEN = "8695421369:AAHh_w4uqyikxPHLQ4At-AyiZnSnEJTm0eU";
-const TG_CHAT = "1162133317";
-
+const FORM = "https://formspree.io/f/mlgajvnv";
 let WINNING_NUMBER = null; 
+
 db.ref('settings/winningNumber').on('value', s => { 
     if(s.val()) WINNING_NUMBER = s.val().toString(); 
 });
 
 let currentUser = null;
 
-// TELEGRAM NOTIFIER
-function notifyTG(msg) {
-    fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: TG_CHAT, text: msg, parse_mode: "Markdown" })
-    });
-}
-
-// NAVIGATION
+// MENU NAVIGATION
 function toggleMenu() { document.getElementById("sidebar").classList.toggle("active"); }
 function showView(viewId) {
     document.querySelectorAll('.view-container').forEach(v => v.classList.add('hidden'));
@@ -234,7 +230,7 @@ function showView(viewId) {
     toggleMenu();
 }
 
-/* UI UTILS */
+/* UI LOGIC */
 setInterval(() => { document.getElementById("livePlayers").innerText = 42 + Math.floor(Math.random() * 10); }, 3000);
 setInterval(() => {
     const now = new Date();
@@ -250,7 +246,7 @@ function sendChat() {
     document.getElementById("chatMessages").appendChild(p); i.value = "";
 }
 
-/* ACTIONS */
+/* CORE ACTIONS */
 function pay() {
     const email = document.getElementById("email").value;
     const nickname = document.getElementById("nickname").value;
@@ -264,19 +260,11 @@ function pay() {
         callback: function(data) {
             const code = Math.floor(1000 + Math.random() * 9000).toString();
             const hour = new Date().getHours();
-            
-            // 1. SAVE TO FIREBASE
             db.ref('codes/' + code).set({ nickname, email, paid: true, used: false, hour, ref: data.transaction_id })
             .then(() => {
-                // 2. SHOW CODE ON SCREEN IMMEDIATELY
                 document.getElementById("codeBox").classList.remove("hidden");
                 document.getElementById("code").innerText = code;
-                
-                // 3. SEND BACKGROUND NOTIFICATIONS (If Formspree fails, code still shows!)
-                notifyTG(`💰 *NEW PAYMENT*\n👤 *User:* ${nickname}\n🔑 *Code:* ${code}\n💳 *Ref:* ${data.transaction_id}`);
-                
-                fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Status: "PAID", Nickname: nickname, Access_Code: code }) })
-                .catch(e => console.log("Formspree limit hit."));
+                fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Status: "PAID", Nickname: nickname, Access_Code: code, Ref: data.transaction_id }) });
             });
         }
     });
@@ -299,7 +287,7 @@ function login() {
             currentUser = input;
             document.getElementById("loginStatus").innerText = "Welcome, " + d.nickname;
             document.getElementById("gameBox").classList.remove("hidden");
-        } else { alert("Code invalid or used."); }
+        } else { alert("Code invalid or already used."); }
     });
 }
 
@@ -310,16 +298,10 @@ function submitGuess() {
     db.ref('codes/' + currentUser).once('value').then(s => {
         const d = s.val();
         let status = (String(val).trim() === String(WINNING_NUMBER).trim()) ? "WINNER" : "NOT A MATCH";
-        
-        // Save result
+        // Save the correct number at this moment so we can reveal it later
         db.ref('codes/' + currentUser).update({ used: true, guess: val, result: status, revealedWinNum: WINNING_NUMBER })
         .then(() => {
-            // Background alerts
-            notifyTG(`🎯 *GUESS*\n👤 *User:* ${d.nickname}\n🔢 *Guess:* ${val}\n🏆 *Result:* ${status}\n🔑 *Code:* ${currentUser}`);
-            
-            fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Nickname: d.nickname, Guess: val, Result: status, Code: currentUser }) })
-            .catch(e => console.log("Formspree limit hit."));
-
+            fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Nickname: d.nickname, Guess: val, Result: status, Code: currentUser }) });
             alert("Guess Logged!"); location.reload();
         });
     });
@@ -333,10 +315,14 @@ function checkUserResult() {
         if(!d || !d.used) return alert("Result not found.");
         const currentHour = new Date().getHours();
         if (currentHour == d.hour) {
-            display.innerHTML = `<p class="font-bold text-orange-600">⏳ Live Session. Wait for next hour!</p>`;
+            display.innerHTML = `<p class="font-bold text-orange-600">⏳ Session Live. Wait for next hour!</p>`;
         } else {
             const color = d.result === "WINNER" ? "text-green-600" : "text-red-600";
-            display.innerHTML = `<p class="font-black text-xl ${color}">${d.result}</p><p class="text-xs">Your Guess: ${d.guess}</p><p class="text-xs font-bold">Correct was: ${d.revealedWinNum || "???"}</p>`;
+            display.innerHTML = `
+                <p class="font-black text-xl ${color}">${d.result}</p>
+                <p class="text-xs text-slate-500">Your Guess: ${d.guess}</p>
+                <p class="text-xs font-bold text-slate-800">Correct Number was: ${d.revealedWinNum || "???"}</p>
+            `;
         }
     });
 }
