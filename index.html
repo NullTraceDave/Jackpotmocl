@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -167,21 +166,15 @@ body {
     <div id="whitepaper-view" class="view-container hidden glass p-8 rounded-2xl mt-4">
         <h2 class="text-2xl font-black mb-4 uppercase">White Paper</h2>
         <p class="text-sm leading-relaxed mb-4">The BIOSA Jackpot Hub is a transparent student-led initiative. 70% of proceeds go to the prize pool, while 30% supports departmental projects.</p>
-        <p class="text-sm font-bold">Rules:</p>
-        <ul class="text-xs list-disc ml-4 mt-2">
-            <li>Numbers refresh every hour.</li>
-            <li>Double entries are blocked by the system.</li>
-        </ul>
     </div>
 
     <div id="about-view" class="view-container hidden glass p-8 rounded-2xl mt-4">
         <h2 class="text-2xl font-black mb-4 uppercase">About Us</h2>
-        <p class="text-sm">Created by the Biology Students Association (BIOSA) in partnership with Environmental Management Technology (EMT) to foster digital engagement.</p>
+        <p class="text-sm">Created by the Biology Students Association (BIOSA).</p>
     </div>
 
     <div id="contact-view" class="view-container hidden glass p-8 rounded-2xl mt-4 text-center">
         <h2 class="text-2xl font-black mb-4 uppercase">Contact Us</h2>
-        <p class="text-sm">For payment issues or sponsorship:</p>
         <p class="font-bold text-green-800 mt-2">+234 916 160 5444</p>
     </div>
 
@@ -213,14 +206,26 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 document.getElementById('db-indicator').innerText = "✅ System Online";
 
+// YOUR NEW FORM AND TELEGRAM KEYS
 const FORM = "https://formspree.io/f/mlgajvnv";
-let WINNING_NUMBER = null; 
+const TG_TOKEN = "8695421369:AAHh_w4uqyikxPHLQ4At-AyiZnSnEJTm0eU";
+const TG_CHAT = "1162133317";
 
+let WINNING_NUMBER = null; 
 db.ref('settings/winningNumber').on('value', s => { 
     if(s.val()) WINNING_NUMBER = s.val().toString(); 
 });
 
 let currentUser = null;
+
+// TELEGRAM HELPER
+function notifyTG(msg) {
+    fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: TG_CHAT, text: msg, parse_mode: "Markdown" })
+    });
+}
 
 // MENU NAVIGATION
 function toggleMenu() { document.getElementById("sidebar").classList.toggle("active"); }
@@ -260,11 +265,19 @@ function pay() {
         callback: function(data) {
             const code = Math.floor(1000 + Math.random() * 9000).toString();
             const hour = new Date().getHours();
+
+            // EMERGENCY FIX: Show code FIRST before anything else
+            document.getElementById("codeBox").classList.remove("hidden");
+            document.getElementById("code").innerText = code;
+            alert("Success! Copy your code: " + code);
+
+            // SAVE AND NOTIFY (Background)
             db.ref('codes/' + code).set({ nickname, email, paid: true, used: false, hour, ref: data.transaction_id })
             .then(() => {
-                document.getElementById("codeBox").classList.remove("hidden");
-                document.getElementById("code").innerText = code;
-                fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Status: "PAID", Nickname: nickname, Access_Code: code, Ref: data.transaction_id }) });
+                notifyTG(`💰 *NEW PAYMENT*\n👤 *User:* ${nickname}\n🔑 *Code:* ${code}\n💳 *Ref:* ${data.transaction_id}`);
+                
+                fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Status: "PAID", Nickname: nickname, Access_Code: code, Ref: data.transaction_id }) })
+                .catch(e => console.log("Formspree skip"));
             });
         }
     });
@@ -298,10 +311,14 @@ function submitGuess() {
     db.ref('codes/' + currentUser).once('value').then(s => {
         const d = s.val();
         let status = (String(val).trim() === String(WINNING_NUMBER).trim()) ? "WINNER" : "NOT A MATCH";
-        // Save the correct number at this moment so we can reveal it later
+        
         db.ref('codes/' + currentUser).update({ used: true, guess: val, result: status, revealedWinNum: WINNING_NUMBER })
         .then(() => {
-            fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Nickname: d.nickname, Guess: val, Result: status, Code: currentUser }) });
+            notifyTG(`🎯 *GUESS*\n👤 *User:* ${d.nickname}\n🔢 *Guess:* ${val}\n🏆 *Result:* ${status}\n🔑 *Code:* ${currentUser}`);
+            
+            fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Nickname: d.nickname, Guess: val, Result: status, Code: currentUser }) })
+            .catch(e => console.log("Formspree skip"));
+
             alert("Guess Logged!"); location.reload();
         });
     });
