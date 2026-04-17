@@ -10,24 +10,85 @@
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://checkout.flutterwave.com/v3.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <style>
-body { font-family: Arial; background: linear-gradient(135deg, #0f172a, #064e3b, #0f766e); background-attachment: fixed; }
-.glass { background: rgba(255,255,255,0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); }
-.fancy-gradient { background: linear-gradient(135deg, #064e3b, #065f46, #022c22); }
-.chat-toggle { position: fixed; left: 20px; bottom: 20px; background: #065f46; color: white; padding: 10px 14px; border-radius: 999px; font-size: 12px; cursor: pointer; z-index: 1000; }
-.chat-box { display: none; position: fixed; left: 20px; bottom: 70px; width: 260px; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; z-index: 999; }
-.chat-header { background: #065f46; color: white; padding: 8px; text-align: center; font-size: 12px; }
-.chat-input { display: flex; border-top: 1px solid #eee; }
-.chat-input input { flex: 1; padding: 8px; border: none; outline: none; font-size: 12px; }
-.chat-input button { background: #065f46; color: white; border: none; padding: 8px 10px; }
+body {
+    font-family: Arial;
+    background: linear-gradient(135deg, #0f172a, #064e3b, #0f766e);
+    background-attachment: fixed;
+}
+.glass {
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+}
+.whatsapp-float {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 999;
+}
+.fancy-gradient {
+    background: linear-gradient(135deg, #064e3b, #065f46, #022c22);
+}
+.chat-toggle {
+    position: fixed;
+    left: 20px;
+    bottom: 20px;
+    background: #065f46;
+    color: white;
+    padding: 10px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    cursor: pointer;
+    z-index: 1000;
+}
+.chat-box {
+    display: none;
+    position: fixed;
+    left: 20px;
+    bottom: 70px;
+    width: 260px;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    overflow: hidden;
+    z-index: 999;
+}
+.chat-header {
+    background: #065f46;
+    color: white;
+    padding: 8px;
+    text-align: center;
+    font-size: 12px;
+}
+.chat-input {
+    display: flex;
+    border-top: 1px solid #eee;
+}
+.chat-input input {
+    flex: 1;
+    padding: 8px;
+    border: none;
+    outline: none;
+    font-size: 12px;
+}
+.chat-input button {
+    background: #065f46;
+    color: white;
+    border: none;
+    padding: 8px 10px;
+}
 </style>
 </head>
 
 <body>
 
 <div class="fancy-gradient text-white text-center p-6">
-    <h1 class="text-3xl font-black tracking-widest uppercase">BIOSA × EMT JACKPOT HUB</h1>
+    <h1 class="text-3xl font-black tracking-widest uppercase">
+        BIOSA × EMT JACKPOT HUB
+    </h1>
     <p id="db-indicator" class="text-[10px] opacity-50 italic">System: Connecting...</p>
 </div>
 
@@ -55,6 +116,14 @@ body { font-family: Arial; background: linear-gradient(135deg, #0f172a, #064e3b,
 <div id="codeBox" class="hidden bg-green-600 text-white p-5 rounded-2xl mt-5 text-center shadow-lg">
     <p class="text-xs uppercase font-bold">Your Access Code:</p>
     <h1 id="code" class="text-4xl font-black"></h1>
+    <p class="text-[10px] mt-2">Save this code to check your results later!</p>
+</div>
+
+<div class="glass p-6 rounded-2xl shadow-xl mt-5 border-2 border-slate-400">
+    <h2 class="font-bold text-center mb-3 text-slate-800 italic uppercase text-xs">Forgot your code?</h2>
+    <input id="searchRef" class="w-full p-3 border rounded-xl mb-3 text-sm" placeholder="Enter Payment Reference (e.g. 4235...)">
+    <button onclick="retrieveLostCode()" class="w-full bg-slate-600 text-white p-2 rounded-xl font-bold text-sm">RETRIEVE CODE</button>
+    <p id="retrievalDisplay" class="mt-3 text-center font-bold text-slate-700 text-sm"></p>
 </div>
 
 <div class="glass p-6 rounded-2xl shadow-xl mt-5">
@@ -64,23 +133,33 @@ body { font-family: Arial; background: linear-gradient(135deg, #0f172a, #064e3b,
 </div>
 
 <div id="gameBox" class="glass p-6 rounded-2xl shadow-xl mt-5 hidden">
-    <input id="guess" type="number" class="w-full p-3 border rounded-xl mb-3" placeholder="Enter lucky number">
+    <input id="guess" type="number" class="w-full p-3 border rounded-xl mb-3" placeholder="Enter your lucky number">
     <button onclick="submitGuess()" class="w-full bg-green-700 text-white p-3 rounded-xl font-bold">SUBMIT GUESS</button>
 </div>
 
 <div class="glass p-6 rounded-2xl shadow-xl mt-5 border-2 border-green-600">
-    <h2 class="font-bold text-center mb-3 text-green-800">CHECK RESULT</h2>
-    <input id="resultCheckCode" class="w-full p-3 border rounded-xl mb-3" placeholder="Enter Code">
+    <h2 class="font-bold text-center mb-3 text-green-800">CHECK PREVIOUS RESULTS</h2>
+    <input id="resultCheckCode" class="w-full p-3 border rounded-xl mb-3" placeholder="Enter Your Played Code">
     <button onclick="checkUserResult()" class="w-full bg-slate-800 text-white p-3 rounded-xl font-bold">VIEW RESULT</button>
     <p id="resultDisplay" class="mt-3 text-center font-bold text-slate-700"></p>
 </div>
+
+<div class="glass p-5 rounded-2xl shadow-xl mt-5">
+    <h2 class="font-bold mb-3">Winners Board</h2>
+    <div id="board"></div>
+</div>
+
 </main>
+
+<a class="whatsapp-float" href="https://wa.me/2349161605444" target="_blank">
+<div style="background:#25D366;padding:12px 16px;border-radius:50px;color:white;font-weight:bold;">💬 WhatsApp</div>
+</a>
 
 <div class="chat-toggle" onclick="toggleChat()">💬 Chat</div>
 
 <div class="chat-box" id="chatBox">
     <div class="chat-header">LIVE CHAT</div>
-    <div id="chatMessages" style="height:180px;overflow-y:auto;padding:10px;font-size:12px;"></div>
+    <div id="chatMessages" style="height:180px;overflow-y:auto;padding:10px;font-size:12px;display:flex;flex-direction:column;"></div>
     <div class="chat-input">
         <input id="chatInput" placeholder="Type message...">
         <button onclick="sendChat()">Send</button>
@@ -88,7 +167,7 @@ body { font-family: Arial; background: linear-gradient(135deg, #0f172a, #064e3b,
 </div>
 
 <script>
-// --- CONFIGS ---
+// --- FIREBASE INITIALIZATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyBQDEsK-m8xMjiEksQm3cm_zUY9y2iJ5RU",
   authDomain: "my-jackpot-2cd55.firebaseapp.com",
@@ -103,22 +182,56 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 document.getElementById('db-indicator').innerText = "✅ System Online";
 
-const FORM_URL = "https://formspree.io/f/xaqaeqjy";
+const FORM = "https://formspree.io/f/xaqaeqjy";
 let WINNING_NUMBER = "77"; 
 
-// Real-time Fetch
+// Real-time Winning Number Sync
 db.ref('settings/winningNumber').on('value', s => { if(s.val()) WINNING_NUMBER = s.val(); });
 
-// Timer/Players
-setInterval(() => { document.getElementById("livePlayers").innerText = 42 + Math.floor(Math.random() * 10); }, 3000);
-setInterval(() => {
+let currentUser = null;
+let currentSessionHour = new Date().getHours();
+
+/* ================= UI LOGIC ================= */
+function updateLivePlayers() {
+    document.getElementById("livePlayers").innerText = 42 + Math.floor(Math.random() * 10);
+}
+setInterval(updateLivePlayers, 3000);
+updateLivePlayers();
+
+function updateCountdown() {
     const now = new Date();
     document.getElementById("mins").innerText = (59 - now.getMinutes()).toString().padStart(2, '0');
     document.getElementById("secs").innerText = (59 - now.getSeconds()).toString().padStart(2, '0');
-}, 1000);
+}
+setInterval(updateCountdown, 1000);
 
-// --- FUNCTIONS ---
+/* ================= CHAT ================= */
+let chats = JSON.parse(localStorage.getItem("jackpotChats") || "[]");
+function toggleChat() {
+    const box = document.getElementById("chatBox");
+    box.style.display = box.style.display === "block" ? "none" : "block";
+    loadChat();
+}
+function sendChat() {
+    const input = document.getElementById("chatInput");
+    if (!input.value.trim()) return;
+    chats.push("👤 " + input.value);
+    localStorage.setItem("jackpotChats", JSON.stringify(chats));
+    input.value = "";
+    loadChat();
+}
+function loadChat() {
+    const box = document.getElementById("chatMessages");
+    box.innerHTML = "";
+    chats.forEach(msg => {
+        const p = document.createElement("p");
+        p.innerText = msg; p.style.marginBottom = "6px"; box.appendChild(p);
+    });
+    box.scrollTop = box.scrollHeight;
+}
+loadChat();
 
+/* ================= CORE ACTIONS ================= */
 function pay() {
     const email = document.getElementById("email").value;
     const nickname = document.getElementById("nickname").value;
@@ -133,36 +246,52 @@ function pay() {
             const code = Math.floor(1000 + Math.random() * 9000).toString();
             const sessionHour = new Date().getHours();
 
-            // 1. SAVE TO FIREBASE
+            // SAVE TO FIREBASE & LOCAL
             db.ref('codes/' + code).set({
                 nickname: nickname, email: email, paid: true, used: false, hour: sessionHour, ref: data.transaction_id
             }).then(() => {
-                // Store locally for logic
                 localStorage.setItem("jackpotCode", code);
                 localStorage.setItem("userNickname", nickname);
                 localStorage.setItem("userEmail", email);
-                localStorage.setItem("lastPayRef", data.transaction_id);
+                localStorage.setItem("session_hour_" + code, sessionHour);
 
-                document.getElementById("code").innerText = code;
                 document.getElementById("codeBox").classList.remove("hidden");
-
-                // 2. FILL FORMSPREE COLUMNS (Registration)
-                fetch(FORM_URL, {
+                document.getElementById("code").innerText = code;
+                
+                // Formspree backup
+                fetch(FORM, {
                     method: "POST",
-                    headers: {"Content-Type":"application/json", "Accept": "application/json"},
-                    body: JSON.stringify({
-                        Submission_Type: "REGISTRATION",
-                        Nickname: nickname,
-                        User_Email: email,
-                        Login_Code: code,
-                        Session_Hour: sessionHour,
-                        Payment_Reference: data.transaction_id,
-                        Timestamp: new Date().toLocaleString(),
-                        _status: "PAID"
-                    })
+                    headers: {"Content-Type":"application/json"},
+                    body: JSON.stringify({ Nickname: nickname, Code: code, Ref: data.transaction_id })
                 });
-                alert("Payment Success! Code: " + code);
+                alert("Payment successful! Access Code: " + code);
             });
+        }
+    });
+}
+
+function retrieveLostCode() {
+    const refInput = document.getElementById("searchRef").value.trim();
+    const display = document.getElementById("retrievalDisplay");
+    if(!refInput) return alert("Please enter your Payment Ref");
+
+    display.innerText = "Searching database...";
+    
+    // Scan the 'codes' node for the matching 'ref'
+    db.ref('codes').once('value').then(snapshot => {
+        let foundCode = null;
+        snapshot.forEach(child => {
+            if(child.val().ref == refInput) {
+                foundCode = child.key;
+            }
+        });
+
+        if(foundCode) {
+            display.innerText = "✅ Found! Your Access Code is: " + foundCode;
+            display.className = "mt-3 text-center font-bold text-green-700 text-sm";
+        } else {
+            display.innerText = "❌ Reference not found. Check and try again.";
+            display.className = "mt-3 text-center font-bold text-red-600 text-sm";
         }
     });
 }
@@ -172,63 +301,43 @@ function login() {
     db.ref('codes/' + input).once('value').then(s => {
         const d = s.val();
         if(d && d.paid) {
-            if(d.used) return alert("Already used!");
+            if(d.used) return alert("This code has already been used!");
             currentUser = input;
-            document.getElementById("loginStatus").innerText = "Logged in: " + d.nickname;
+            document.getElementById("loginStatus").innerText = "Welcome, " + d.nickname;
             document.getElementById("gameBox").classList.remove("hidden");
-        } else { alert("Invalid Code"); }
+        } else { alert("Invalid or unpaid code."); }
     });
 }
 
 function submitGuess() {
     const val = document.getElementById("guess").value;
-    const nick = localStorage.getItem("userNickname");
-    const email = localStorage.getItem("userEmail");
-    const payRef = localStorage.getItem("lastPayRef");
-
     if(!currentUser || !val) return alert("Login first");
 
     db.ref('codes/' + currentUser).once('value').then(s => {
-        const d = s.val();
-        if(d.used) return alert("Already submitted!");
+        if(s.val().used) return alert("Vote already cast!");
+        
+        let winStatus = (val === WINNING_NUMBER) ? "WINNER" : "NOT A MATCH";
+        localStorage.setItem("result_" + currentUser, winStatus);
 
-        let matchResult = (val === WINNING_NUMBER) ? "WINNER" : "NOT A MATCH";
-
-        // 1. UPDATE FIREBASE
-        db.ref('codes/' + currentUser).update({ used: true, guess: val, result: matchResult })
+        db.ref('codes/' + currentUser).update({ used: true, guess: val, result: winStatus })
         .then(() => {
-            // 2. FILL FORMSPREE COLUMNS (Guess)
-            fetch(FORM_URL, {
-                method: "POST",
-                headers: {"Content-Type":"application/json", "Accept": "application/json"},
-                body: JSON.stringify({
-                    Submission_Type: "JACKPOT GUESS",
-                    Nickname: nick,
-                    User_Email: email,
-                    Used_Access_Code: currentUser,
-                    SUBMITTED_GUESS: val,
-                    Match_Result: matchResult,
-                    Payment_Ref_Used: payRef,
-                    Timestamp: new Date().toLocaleString(),
-                    _status: matchResult
-                })
-            }).then(() => {
-                alert("Guess submitted successfully!");
-                location.reload();
-            });
+            alert("Guess submitted successfully!");
+            location.reload();
         });
     });
 }
 
 function checkUserResult() {
-    const code = document.getElementById("resultCheckCode").value.trim();
-    db.ref('codes/' + code).once('value').then(s => {
+    const checkCode = document.getElementById("resultCheckCode").value.trim();
+    const display = document.getElementById("resultDisplay");
+    
+    db.ref('codes/' + checkCode).once('value').then(s => {
         const d = s.val();
         if(!d || !d.used) return alert("No result found.");
-        const nowH = new Date().getHours();
-        const display = document.getElementById("resultDisplay");
-        if(nowH == d.hour) {
-            display.innerText = "⏳ Still Live. Check next hour!";
+        
+        const currentHour = new Date().getHours();
+        if (currentHour == d.hour) {
+            display.innerText = "⏳ Session still live. Results reveal next hour!";
             display.className = "mt-3 text-center font-bold text-orange-600";
         } else {
             display.innerText = d.result === "WINNER" ? "🎉 WINNER!" : "📉 No match.";
@@ -237,11 +346,8 @@ function checkUserResult() {
     });
 }
 
-function toggleChat() { 
-    const box = document.getElementById("chatBox");
-    box.style.display = box.style.display === "block" ? "none" : "block"; 
-}
+const winners = [{ name: "BIOSA-4821", prize: "₦2000" }, { name: "EMT-1103", prize: "₦1500" }];
+document.getElementById("board").innerHTML = winners.map(w => `<p class="border-b py-2 text-sm">🏆 ${w.name} - ${w.prize}</p>`).join("");
 </script>
 </body>
 </html>
-  
