@@ -151,7 +151,8 @@ body {
         </div>
 
         <div class="glass p-6 rounded-2xl shadow-xl mt-5 border-2 border-green-600">
-            <h2 class="font-bold text-center mb-3 text-green-800">CHECK PREVIOUS RESULTS</h2>
+            <h2 class="font-bold text-center mb-3 text-green-800">CHECK RESULTS</h2>
+            <p class="text-[10px] text-center text-slate-500 mb-3">Note: Results reveal only after the current hour ends.</p>
             <input id="resultCheckCode" class="w-full p-3 border rounded-xl mb-3" placeholder="Enter Your Played Code">
             <button onclick="checkUserResult()" class="w-full bg-slate-800 text-white p-3 rounded-xl font-bold">VIEW RESULT</button>
             <div id="resultDisplay" class="mt-3 text-center"></div>
@@ -206,7 +207,6 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 document.getElementById('db-indicator').innerText = "✅ System Online";
 
-// YOUR NEW FORM AND TELEGRAM KEYS
 const FORM = "https://formspree.io/f/mlgajvnv";
 const TG_TOKEN = "8695421369:AAHh_w4uqyikxPHLQ4At-AyiZnSnEJTm0eU";
 const TG_CHAT = "1162133317";
@@ -218,7 +218,16 @@ db.ref('settings/winningNumber').on('value', s => {
 
 let currentUser = null;
 
-// TELEGRAM HELPER
+function getSessionID() {
+    const now = new Date();
+    const wat = new Date(now.toLocaleString("en-US", {timeZone: "Africa/Lagos"}));
+    const y = wat.getFullYear();
+    const m = (wat.getMonth() + 1).toString().padStart(2, '0');
+    const d = wat.getDate().toString().padStart(2, '0');
+    const h = wat.getHours().toString().padStart(2, '0');
+    return `${y}-${m}-${d}-${h}`;
+}
+
 function notifyTG(msg) {
     fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
         method: "POST",
@@ -227,7 +236,6 @@ function notifyTG(msg) {
     });
 }
 
-// MENU NAVIGATION
 function toggleMenu() { document.getElementById("sidebar").classList.toggle("active"); }
 function showView(viewId) {
     document.querySelectorAll('.view-container').forEach(v => v.classList.add('hidden'));
@@ -243,7 +251,6 @@ setInterval(() => {
     document.getElementById("secs").innerText = (59 - now.getSeconds()).toString().padStart(2, '0');
 }, 1000);
 
-/* CHAT */
 function toggleChat() { let b = document.getElementById("chatBox"); b.style.display = (b.style.display === "block") ? "none" : "block"; }
 function sendChat() {
     let i = document.getElementById("chatInput"); if (!i.value.trim()) return;
@@ -264,22 +271,22 @@ function pay() {
         customer: { email, name: nickname },
         callback: function(data) {
             const code = Math.floor(1000 + Math.random() * 9000).toString();
-            const hour = new Date().getHours();
-            const time = new Date().toLocaleString();
+            const sessionID = getSessionID();
 
-            // EMERGENCY FIX: Show code FIRST
             document.getElementById("codeBox").classList.remove("hidden");
             document.getElementById("code").innerText = code;
             alert("Success! Copy your code: " + code);
 
-            // SAVE AND NOTIFY (Background)
-            db.ref('codes/' + code).set({ nickname, email, paid: true, used: false, hour, ref: data.transaction_id })
+            db.ref('codes/' + code).set({ 
+                nickname, 
+                email, 
+                paid: true, 
+                used: false, 
+                sessionID: sessionID, 
+                ref: data.transaction_id 
+            })
             .then(() => {
-                // Expanded Telegram Info to match Formspree
-                notifyTG(`💰 NEW PAYMENT RECEIVED\n\n👤 Nickname: ${nickname}\n📧 Email: ${email}\n🔑 Access Code: ${code}\n💳 Ref: ${data.transaction_id}\n🕒 Time: ${time}`);
-                
-                fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Status: "PAID", Nickname: nickname, User_Email: email, Access_Code: code, Ref: data.transaction_id, Timestamp: time }) })
-                .catch(e => console.log("Formspree skip"));
+                notifyTG("💰 NEW PAYMENT\nUser: " + nickname + "\nCode: " + code + "\nSession: " + sessionID);
             });
         }
     });
@@ -313,16 +320,21 @@ function submitGuess() {
     db.ref('codes/' + currentUser).once('value').then(s => {
         const d = s.val();
         let status = (String(val).trim() === String(WINNING_NUMBER).trim()) ? "WINNER" : "NOT A MATCH";
-        const time = new Date().toLocaleString();
-        
-        db.ref('codes/' + currentUser).update({ used: true, guess: val, result: status, revealedWinNum: WINNING_NUMBER })
-        .then(() => {
-            // Expanded Telegram Info to match Formspree
-            notifyTG(`🎯 NEW GUESS SUBMISSION\n\n👤 Nickname: ${d.nickname}\n📧 Email: ${d.email}\n🔢 Guess: ${val}\n🏆 Result: ${status}\n🔑 Code: ${currentUser}\n💳 Ref Used: ${d.ref}\n🕒 Time: ${time}`);
-            
-            fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Submission_Type: "GUESS_SUBMISSION", Nickname: d.nickname, User_Email: d.email, Guess: val, Match_Result: status, Used_Access_Code: currentUser, Payment_Ref_Used: d.ref, Timestamp: time }) })
-            .catch(e => console.log("Formspree skip"));
+        const timePlayed = new Date().toLocaleString("en-US", {timeZone: "Africa/Lagos"});
 
+        db.ref('codes/' + currentUser).update({ 
+            used: true, 
+            guess: val, 
+            result: status, 
+            revealedWinNum: WINNING_NUMBER,
+            timePlayed: timePlayed
+        })
+        .then(() => {
+            // UPDATED TELEGRAM NOTIFICATION WITH FULL DETAILS
+            const tgMsg = `🎯 NEW GUESS SUBMISSION\n\n👤 Nickname: ${d.nickname}\n📧 Email: ${d.email}\n🔢 Guess: ${val}\n🏆 Result: ${status}\n🔑 Code: ${currentUser}\n💳 Ref Used: ${d.ref || 'N/A'}\n🕒 Time: ${timePlayed}`;
+            notifyTG(tgMsg);
+
+            fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Nickname: d.nickname, Guess: val, Result: status, Session: d.sessionID }) });
             alert("Guess Logged!"); location.reload();
         });
     });
@@ -331,18 +343,31 @@ function submitGuess() {
 function checkUserResult() {
     const checkCode = document.getElementById("resultCheckCode").value.trim();
     const display = document.getElementById("resultDisplay");
+    
     db.ref('codes/' + checkCode).once('value').then(s => {
         const d = s.val();
         if(!d || !d.used) return alert("Result not found.");
         
-        const color = d.result === "WINNER" ? "text-green-600" : "text-red-600";
-        const finalNumber = d.revealedWinNum || WINNING_NUMBER || "???";
+        const currentSession = getSessionID();
+        
+        if (currentSession === d.sessionID) {
+            display.innerHTML = `
+                <div class="bg-amber-100 p-4 rounded-xl border border-amber-300">
+                    <p class="font-bold text-amber-800">⏳ SESSION IN PROGRESS</p>
+                    <p class="text-[11px] text-amber-700 mt-1">Results for this hour are locked. Check back when the next hour begins.</p>
+                </div>`;
+        } else {
+            const color = d.result === "WINNER" ? "text-green-600" : "text-red-600";
+            const winNum = d.revealedWinNum || "???";
 
-        display.innerHTML = `
-            <p class="font-black text-xl ${color}">${d.result}</p>
-            <p class="text-xs text-slate-500">Your Guess: ${d.guess}</p>
-            <p class="text-xs font-bold text-slate-800">Correct Number was: ${finalNumber}</p>
-        `;
+            display.innerHTML = `
+                <div class="bg-white p-4 rounded-xl shadow-inner border border-slate-200">
+                    <p class="font-black text-2xl ${color} mb-1">${d.result}</p>
+                    <p class="text-sm text-slate-500">Your Guess: <span class="font-bold text-slate-800">${d.guess}</span></p>
+                    <p class="text-sm text-slate-500">Correct Number: <span class="font-bold text-green-700">${winNum}</span></p>
+                    <p class="text-[9px] text-slate-400 mt-2 uppercase italic">Session ID: ${d.sessionID}</p>
+                </div>`;
+        }
     });
 }
 
