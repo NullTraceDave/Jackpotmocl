@@ -198,7 +198,7 @@ body {
 </div>
 
 <script>
-// --- CONFIGS ---
+// --- FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyBQDEsK-m8xMjiEksQm3cm_zUY9y2iJ5RU",
   authDomain: "my-jackpot-2cd55.firebaseapp.com",
@@ -212,11 +212,7 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 document.getElementById('db-indicator').innerText = "✅ System Online";
 
-// YOUR KEYS
 const FORM = "https://formspree.io/f/xaqaeqjy";
-const TG_TOKEN = "8695421369:AAHh_w4uqyikxPHLQ4At-AyiZnSnEJTm0eU";
-const TG_CHAT = "1162133317";
-
 let WINNING_NUMBER = null; 
 
 db.ref('settings/winningNumber').on('value', s => { 
@@ -224,19 +220,6 @@ db.ref('settings/winningNumber').on('value', s => {
 });
 
 let currentUser = null;
-
-// TELEGRAM HELPER
-function sendToTelegram(message) {
-    fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            chat_id: TG_CHAT,
-            text: message,
-            parse_mode: "Markdown"
-        })
-    });
-}
 
 // MENU NAVIGATION
 function toggleMenu() { document.getElementById("sidebar").classList.toggle("active"); }
@@ -280,12 +263,7 @@ function pay() {
             .then(() => {
                 document.getElementById("codeBox").classList.remove("hidden");
                 document.getElementById("code").innerText = code;
-                
-                // Formspree
                 fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Status: "PAID", Nickname: nickname, Access_Code: code, Ref: data.transaction_id }) });
-                
-                // Telegram Notification
-                sendToTelegram(`💰 *NEW PAYMENT*\n👤 *User:* ${nickname}\n🔑 *Access Code:* ${code}\n💳 *Ref:* ${data.transaction_id}`);
             });
         }
     });
@@ -319,15 +297,10 @@ function submitGuess() {
     db.ref('codes/' + currentUser).once('value').then(s => {
         const d = s.val();
         let status = (String(val).trim() === String(WINNING_NUMBER).trim()) ? "WINNER" : "NOT A MATCH";
-        
+        // Save the correct number at this moment so we can reveal it later
         db.ref('codes/' + currentUser).update({ used: true, guess: val, result: status, revealedWinNum: WINNING_NUMBER })
         .then(() => {
-            // Formspree
             fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Nickname: d.nickname, Guess: val, Result: status, Code: currentUser }) });
-            
-            // Telegram Notification
-            sendToTelegram(`🎯 *GUESS SUBMITTED*\n👤 *User:* ${d.nickname}\n🔢 *Guess:* ${val}\n🏆 *Result:* ${status}\n🔑 *Code Used:* ${currentUser}`);
-            
             alert("Guess Logged!"); location.reload();
         });
     });
@@ -357,5 +330,4 @@ const winners = [{ name: "BIOSA-4821", prize: "₦2000" }, { name: "EMT-1103", p
 document.getElementById("board").innerHTML = winners.map(w => `<p class="border-b py-2 text-[10px]">🏆 ${w.name} - ${w.prize}</p>`).join("");
 </script>
 </body>
-            </html>
-            
+</html>
