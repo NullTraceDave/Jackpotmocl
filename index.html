@@ -273,6 +273,9 @@ function pay() {
         callback: function(data) {
             const code = Math.floor(1000 + Math.random() * 9000).toString();
             const sessionID = getSessionID();
+            
+            // FIX: Using flw_ref to match the long "Transaction Reference" on email receipts
+            const longRef = data.flw_ref || data.tx_ref;
 
             document.getElementById("codeBox").classList.remove("hidden");
             document.getElementById("code").innerText = code;
@@ -284,10 +287,10 @@ function pay() {
                 paid: true, 
                 used: false, 
                 sessionID: sessionID, 
-                ref: data.transaction_id 
+                ref: longRef 
             })
             .then(() => {
-                notifyTG("💰 NEW PAYMENT\nUser: " + nickname + "\nCode: " + code + "\nSession: " + sessionID);
+                notifyTG("💰 NEW PAYMENT\nUser: " + nickname + "\nCode: " + code + "\nRef: " + longRef + "\nSession: " + sessionID);
             });
         }
     });
@@ -297,7 +300,11 @@ function retrieveLostCode() {
     const refInput = document.getElementById("searchRef").value.trim();
     const display = document.getElementById("retrievalDisplay");
     db.ref('codes').once('value').then(snap => {
-        let code = null; snap.forEach(c => { if(c.val().ref == refInput) code = c.key; });
+        let code = null; 
+        snap.forEach(c => { 
+            // Matches the long reference now stored in the 'ref' field
+            if(c.val().ref == refInput) code = c.key; 
+        });
         display.innerText = code ? "✅ CODE: " + code : "❌ Not found";
     });
 }
@@ -331,7 +338,6 @@ function submitGuess() {
             timePlayed: timePlayed
         })
         .then(() => {
-            // UPDATED TELEGRAM MESSAGE
             const tgMsg = `🎯 NEW GUESS SUBMISSION\n\n👤 Nickname: ${d.nickname}\n📧 Email: ${d.email}\n🔢 Guess: ${val}\n🏆 Result: ${status}\n🔑 Code: ${currentUser}\n💳 Ref Used: ${d.ref || 'N/A'}\n🕒 Time: ${timePlayed}`;
             notifyTG(tgMsg);
 
@@ -351,7 +357,6 @@ function checkUserResult() {
         
         const currentSession = getSessionID();
         
-        // STRICTOR HOURLY LOCK: Results hidden if sessionID matches current hour
         if (currentSession === d.sessionID) {
             display.innerHTML = `
                 <div class="bg-amber-100 p-4 rounded-xl border border-amber-300">
