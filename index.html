@@ -121,7 +121,7 @@ body {
 
 <div class="glass p-6 rounded-2xl shadow-xl mt-5 border-2 border-slate-400">
     <h2 class="font-bold text-center mb-3 text-slate-800 italic uppercase text-xs">Forgot your code?</h2>
-    <input id="searchRef" class="w-full p-3 border rounded-xl mb-3 text-sm" placeholder="Enter Payment Reference (e.g. 4235...)">
+    <input id="searchRef" class="w-full p-3 border rounded-xl mb-3 text-sm" placeholder="Enter Payment Reference">
     <button onclick="retrieveLostCode()" class="w-full bg-slate-600 text-white p-2 rounded-xl font-bold text-sm">RETRIEVE CODE</button>
     <p id="retrievalDisplay" class="mt-3 text-center font-bold text-slate-700 text-sm"></p>
 </div>
@@ -183,13 +183,19 @@ const db = firebase.database();
 document.getElementById('db-indicator').innerText = "✅ System Online";
 
 const FORM = "https://formspree.io/f/xaqaeqjy";
-let WINNING_NUMBER = "77"; 
 
-// Real-time Winning Number Sync
-db.ref('settings/winningNumber').on('value', s => { if(s.val()) WINNING_NUMBER = s.val(); });
+// REMOVED HARDCODED NUMBER. Waiting for Firebase...
+let WINNING_NUMBER = null; 
+
+// Real-time Winning Number Sync from Firebase
+db.ref('settings/winningNumber').on('value', s => { 
+    if(s.val()) {
+        WINNING_NUMBER = s.val().toString(); 
+        console.log("System Ready"); // Don't log the actual number!
+    } 
+});
 
 let currentUser = null;
-let currentSessionHour = new Date().getHours();
 
 /* ================= UI LOGIC ================= */
 function updateLivePlayers() {
@@ -246,23 +252,30 @@ function pay() {
             const code = Math.floor(1000 + Math.random() * 9000).toString();
             const sessionHour = new Date().getHours();
 
-            // SAVE TO FIREBASE & LOCAL
             db.ref('codes/' + code).set({
                 nickname: nickname, email: email, paid: true, used: false, hour: sessionHour, ref: data.transaction_id
             }).then(() => {
                 localStorage.setItem("jackpotCode", code);
                 localStorage.setItem("userNickname", nickname);
                 localStorage.setItem("userEmail", email);
-                localStorage.setItem("session_hour_" + code, sessionHour);
+                localStorage.setItem("lastRef", data.transaction_id);
 
                 document.getElementById("codeBox").classList.remove("hidden");
                 document.getElementById("code").innerText = code;
                 
-                // Formspree backup
                 fetch(FORM, {
                     method: "POST",
                     headers: {"Content-Type":"application/json"},
-                    body: JSON.stringify({ Nickname: nickname, Code: code, Ref: data.transaction_id })
+                    body: JSON.stringify({ 
+                        Submission_Type: "NEW_PAYMENT",
+                        Nickname: nickname, 
+                        User_Email: email,
+                        Login_Code: code, 
+                        Payment_Reference: data.transaction_id,
+                        Session_Hour: sessionHour,
+                        Timestamp: new Date().toLocaleString(),
+                        _status: "PAID"
+                    })
                 });
                 alert("Payment successful! Access Code: " + code);
             });
@@ -275,22 +288,15 @@ function retrieveLostCode() {
     const display = document.getElementById("retrievalDisplay");
     if(!refInput) return alert("Please enter your Payment Ref");
 
-    display.innerText = "Searching database...";
-    
-    // Scan the 'codes' node for the matching 'ref'
+    display.innerText = "Searching...";
     db.ref('codes').once('value').then(snapshot => {
         let foundCode = null;
-        snapshot.forEach(child => {
-            if(child.val().ref == refInput) {
-                foundCode = child.key;
-            }
-        });
-
+        snapshot.forEach(child => { if(child.val().ref == refInput) foundCode = child.key; });
         if(foundCode) {
-            display.innerText = "✅ Found! Your Access Code is: " + foundCode;
+            display.innerText = "✅ Your Access Code is: " + foundCode;
             display.className = "mt-3 text-center font-bold text-green-700 text-sm";
         } else {
-            display.innerText = "❌ Reference not found. Check and try again.";
+            display.innerText = "❌ Reference not found.";
             display.className = "mt-3 text-center font-bold text-red-600 text-sm";
         }
     });
@@ -301,28 +307,46 @@ function login() {
     db.ref('codes/' + input).once('value').then(s => {
         const d = s.val();
         if(d && d.paid) {
-            if(d.used) return alert("This code has already been used!");
+            if(d.used) return alert("Already used!");
             currentUser = input;
             document.getElementById("loginStatus").innerText = "Welcome, " + d.nickname;
             document.getElementById("gameBox").classList.remove("hidden");
-        } else { alert("Invalid or unpaid code."); }
+        } else { alert("Invalid Code."); }
     });
 }
 
 function submitGuess() {
     const val = document.getElementById("guess").value;
     if(!currentUser || !val) return alert("Login first");
+    if(!WINNING_NUMBER) return alert("System still loading winning data. Try again in 2 seconds.");
 
     db.ref('codes/' + currentUser).once('value').then(s => {
-        if(s.val().used) return alert("Vote already cast!");
+        const d = s.val();
+        if(d.used) return alert("Already submitted!");
         
-        let winStatus = (val === WINNING_NUMBER) ? "WINNER" : "NOT A MATCH";
-        localStorage.setItem("result_" + currentUser, winStatus);
+        // SECURE COMPARISON: Convert both to strings and trim spaces
+        let winStatus = (String(val).trim() === String(WINNING_NUMBER).trim()) ? "WINNER" : "NOT A MATCH";
 
         db.ref('codes/' + currentUser).update({ used: true, guess: val, result: winStatus })
         .then(() => {
-            alert("Guess submitted successfully!");
-            location.reload();
+            fetch(FORM, {
+                method: "POST",
+                headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({ 
+                    Submission_Type: "GUESS_SUBMISSION",
+                    Nickname: d.nickname,
+                    User_Email: d.email,
+                    Used_Access_Code: currentUser,
+                    SUBMITTED_GUESS: val,
+                    Match_Result: winStatus,
+                    Payment_Ref_Used: d.ref,
+                    Timestamp: new Date().toLocaleString(),
+                    _status: winStatus
+                })
+            }).then(() => {
+                alert("Guess submitted successfully!");
+                location.reload();
+            });
         });
     });
 }
@@ -330,14 +354,12 @@ function submitGuess() {
 function checkUserResult() {
     const checkCode = document.getElementById("resultCheckCode").value.trim();
     const display = document.getElementById("resultDisplay");
-    
     db.ref('codes/' + checkCode).once('value').then(s => {
         const d = s.val();
         if(!d || !d.used) return alert("No result found.");
-        
         const currentHour = new Date().getHours();
         if (currentHour == d.hour) {
-            display.innerText = "⏳ Session still live. Results reveal next hour!";
+            display.innerText = "⏳ Live Session. Check next hour!";
             display.className = "mt-3 text-center font-bold text-orange-600";
         } else {
             display.innerText = d.result === "WINNER" ? "🎉 WINNER!" : "📉 No match.";
