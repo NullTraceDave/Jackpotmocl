@@ -251,6 +251,7 @@ setInterval(() => {
     document.getElementById("secs").innerText = (59 - now.getSeconds()).toString().padStart(2, '0');
 }, 1000);
 
+/* CHAT */
 function toggleChat() { let b = document.getElementById("chatBox"); b.style.display = (b.style.display === "block") ? "none" : "block"; }
 function sendChat() {
     let i = document.getElementById("chatInput"); if (!i.value.trim()) return;
@@ -330,11 +331,11 @@ function submitGuess() {
             timePlayed: timePlayed
         })
         .then(() => {
-            // UPDATED TELEGRAM NOTIFICATION WITH FULL DETAILS
+            // UPDATED TELEGRAM MESSAGE
             const tgMsg = `🎯 NEW GUESS SUBMISSION\n\n👤 Nickname: ${d.nickname}\n📧 Email: ${d.email}\n🔢 Guess: ${val}\n🏆 Result: ${status}\n🔑 Code: ${currentUser}\n💳 Ref Used: ${d.ref || 'N/A'}\n🕒 Time: ${timePlayed}`;
             notifyTG(tgMsg);
 
-            fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Nickname: d.nickname, Guess: val, Result: status, Session: d.sessionID }) });
+            fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Nickname: d.nickname, Guess: val, Result: status, Session: d.sessionID, Code: currentUser, Email: d.email }) });
             alert("Guess Logged!"); location.reload();
         });
     });
@@ -350,11 +351,12 @@ function checkUserResult() {
         
         const currentSession = getSessionID();
         
+        // STRICTOR HOURLY LOCK: Results hidden if sessionID matches current hour
         if (currentSession === d.sessionID) {
             display.innerHTML = `
                 <div class="bg-amber-100 p-4 rounded-xl border border-amber-300">
                     <p class="font-bold text-amber-800">⏳ SESSION IN PROGRESS</p>
-                    <p class="text-[11px] text-amber-700 mt-1">Results for this hour are locked. Check back when the next hour begins.</p>
+                    <p class="text-[11px] text-amber-700 mt-1">The results for this hourly session are locked until the next hour starts.</p>
                 </div>`;
         } else {
             const color = d.result === "WINNER" ? "text-green-600" : "text-red-600";
