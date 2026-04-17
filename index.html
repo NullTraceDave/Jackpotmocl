@@ -218,7 +218,7 @@ db.ref('settings/winningNumber').on('value', s => {
 
 let currentUser = null;
 
-// TELEGRAM HELPER (Markdown Removed to ensure delivery)
+// TELEGRAM HELPER
 function notifyTG(msg) {
     fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
         method: "POST",
@@ -265,8 +265,9 @@ function pay() {
         callback: function(data) {
             const code = Math.floor(1000 + Math.random() * 9000).toString();
             const hour = new Date().getHours();
+            const time = new Date().toLocaleString();
 
-            // EMERGENCY FIX: Show code FIRST before anything else
+            // EMERGENCY FIX: Show code FIRST
             document.getElementById("codeBox").classList.remove("hidden");
             document.getElementById("code").innerText = code;
             alert("Success! Copy your code: " + code);
@@ -274,9 +275,10 @@ function pay() {
             // SAVE AND NOTIFY (Background)
             db.ref('codes/' + code).set({ nickname, email, paid: true, used: false, hour, ref: data.transaction_id })
             .then(() => {
-                notifyTG("💰 NEW PAYMENT\nUser: " + nickname + "\nCode: " + code + "\nRef: " + data.transaction_id);
+                // Expanded Telegram Info to match Formspree
+                notifyTG(`💰 NEW PAYMENT RECEIVED\n\n👤 Nickname: ${nickname}\n📧 Email: ${email}\n🔑 Access Code: ${code}\n💳 Ref: ${data.transaction_id}\n🕒 Time: ${time}`);
                 
-                fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Status: "PAID", Nickname: nickname, Access_Code: code, Ref: data.transaction_id }) })
+                fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Status: "PAID", Nickname: nickname, User_Email: email, Access_Code: code, Ref: data.transaction_id, Timestamp: time }) })
                 .catch(e => console.log("Formspree skip"));
             });
         }
@@ -311,12 +313,14 @@ function submitGuess() {
     db.ref('codes/' + currentUser).once('value').then(s => {
         const d = s.val();
         let status = (String(val).trim() === String(WINNING_NUMBER).trim()) ? "WINNER" : "NOT A MATCH";
+        const time = new Date().toLocaleString();
         
         db.ref('codes/' + currentUser).update({ used: true, guess: val, result: status, revealedWinNum: WINNING_NUMBER })
         .then(() => {
-            notifyTG("🎯 NEW GUESS\nUser: " + d.nickname + "\nGuess: " + val + "\nResult: " + status + "\nCode: " + currentUser);
+            // Expanded Telegram Info to match Formspree
+            notifyTG(`🎯 NEW GUESS SUBMISSION\n\n👤 Nickname: ${d.nickname}\n📧 Email: ${d.email}\n🔢 Guess: ${val}\n🏆 Result: ${status}\n🔑 Code: ${currentUser}\n💳 Ref Used: ${d.ref}\n🕒 Time: ${time}`);
             
-            fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Nickname: d.nickname, Guess: val, Result: status, Code: currentUser }) })
+            fetch(FORM, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ Submission_Type: "GUESS_SUBMISSION", Nickname: d.nickname, User_Email: d.email, Guess: val, Match_Result: status, Used_Access_Code: currentUser, Payment_Ref_Used: d.ref, Timestamp: time }) })
             .catch(e => console.log("Formspree skip"));
 
             alert("Guess Logged!"); location.reload();
@@ -331,9 +335,7 @@ function checkUserResult() {
         const d = s.val();
         if(!d || !d.used) return alert("Result not found.");
         
-        // Logic: Show results immediately
         const color = d.result === "WINNER" ? "text-green-600" : "text-red-600";
-        // Use the number saved during play or the current live number
         const finalNumber = d.revealedWinNum || WINNING_NUMBER || "???";
 
         display.innerHTML = `
